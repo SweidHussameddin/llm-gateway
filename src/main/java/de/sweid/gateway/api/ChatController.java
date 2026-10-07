@@ -28,6 +28,8 @@ public class ChatController {
 
   public static final String ROUTE_HEADER = "X-Gateway-Route";
   public static final String COST_HEADER = "X-Gateway-Cost-Usd";
+  /** Routes that were skipped or failed before the serving one, when any. */
+  public static final String ATTEMPTS_HEADER = "X-Gateway-Attempts";
 
   private final Router router;
   private final BudgetGuard budget;
@@ -57,10 +59,20 @@ public class ChatController {
     Router.Routed<ChatResponse> routed = router.complete(request);
     Usage priced = CostCalculator.price(routed.route(), routed.value().usage());
     ledger.record(record(caller, "chat", request.model(), routed.route(), priced, started));
-    return ResponseEntity.ok()
-        .header(ROUTE_HEADER, routed.route().id())
-        .header(COST_HEADER, priced.costUsd().toPlainString())
-        .body(routed.value().withModelAndUsage(routed.value().model(), priced));
+    ResponseEntity.BodyBuilder response =
+        ResponseEntity.ok()
+            .header(ROUTE_HEADER, routed.route().id())
+            .header(COST_HEADER, priced.costUsd().toPlainString());
+    if (!routed.attempts().isEmpty()) {
+      response.header(ATTEMPTS_HEADER, attemptsHeader(routed.attempts()));
+    }
+    return response.body(routed.value().withModelAndUsage(routed.value().model(), priced));
+  }
+
+  /** Header-safe summary: one line, ASCII, capped. */
+  static String attemptsHeader(java.util.List<String> attempts) {
+    String joined = String.join(" | ", attempts).replaceAll("[^\\x20-\\x7E]", "?");
+    return joined.length() > 400 ? joined.substring(0, 400) + "..." : joined;
   }
 
   private void stream(
@@ -69,14 +81,17 @@ public class ChatController {
     try {
       router.stream(
           request,
-          (route, chunk) -> {
+          (ctx, chunk) -> {
             if (!sse.started()) {
-              servletResponse.setHeader(ROUTE_HEADER, route.id());
+              servletResponse.setHeader(ROUTE_HEADER, ctx.route().id());
+              if (!ctx.attempts().isEmpty()) {
+                servletResponse.setHeader(ATTEMPTS_HEADER, attemptsHeader(ctx.attempts()));
+              }
             }
             ChatChunk out = chunk;
             if (chunk.usage() != null) {
-              Usage priced = CostCalculator.price(route, chunk.usage());
-              ledger.record(record(caller, "chat", request.model(), route, priced, started));
+              Usage priced = CostCalculator.price(ctx.route(), chunk.usage());
+              ledger.record(record(caller, "chat", request.model(), ctx.route(), priced, started));
               out = chunk.withModelAndUsage(chunk.model(), priced);
             }
             sse.data(out);

@@ -63,8 +63,11 @@ public class Router {
                 clock));
   }
 
-  /** The route that produced the answer, with the answer. */
+  /** The route that produced the answer, with the answer and what was tried before it. */
   public record Routed<T>(Route route, T value, List<String> attempts) {}
+
+  /** Handed to stream consumers with every chunk: the serving route and the attempts before it. */
+  public record RouteContext(Route route, List<String> attempts) {}
 
   public Routed<ChatResponse> complete(ChatRequest request) {
     List<Route> candidates = candidates(request.model());
@@ -93,7 +96,7 @@ public class Router {
     throw exhausted(request.model(), attempts, last);
   }
 
-  public Routed<Void> stream(ChatRequest request, BiConsumer<Route, ChatChunk> onChunk) {
+  public Routed<Void> stream(ChatRequest request, BiConsumer<RouteContext, ChatChunk> onChunk) {
     List<Route> candidates = candidates(request.model());
     List<String> attempts = new ArrayList<>();
     ProviderException last = null;
@@ -104,6 +107,7 @@ public class Router {
         continue;
       }
       boolean[] committed = {false};
+      RouteContext ctx = new RouteContext(route, List.copyOf(attempts));
       try {
         providers
             .get(route.provider())
@@ -112,7 +116,7 @@ public class Router {
                 route,
                 chunk -> {
                   committed[0] = true;
-                  onChunk.accept(route, chunk);
+                  onChunk.accept(ctx, chunk);
                 });
         breaker.onSuccess();
         return new Routed<>(route, null, attempts);

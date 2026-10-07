@@ -150,7 +150,7 @@ async function refreshModels() {
   const { data } = await res.json();
   $("routes").innerHTML = data.map(m => `<div class="alias"><b>${m.id}</b><small>${m.description || ""}</small></div>` +
     m.routes.map(r => `<div class="route"><div>${r.provider}<small>${r.model}</small></div>
-      <span class="pill ${r.configured ? r.breaker : "off"}">${r.configured ? r.breaker.replace("_", " ") : "no key"}</span></div>`).join("")).join("");
+      <span class="pill ${r.configured ? r.breaker : "off"}">${r.configured ? r.breaker.replace("_", " ") + (r.failures ? " · " + r.failures + " fail" : "") : "no key"}</span></div>`).join("")).join("");
   for (const sel of [$("chatModel"), $("agentModel")]) {
     const cur = sel.value;
     sel.innerHTML = data.map(m => `<option value="${m.id}">${m.id}</option>`).join("");
@@ -217,9 +217,11 @@ $("chatForm").addEventListener("submit", async (ev) => {
     }
     out.innerHTML = md(out.textContent);
     const ms = Math.round(performance.now() - t0);
+    const attempts = res.headers.get("X-Gateway-Attempts");
     meta.innerHTML = `<span>route <b>${res.headers.get("X-Gateway-Route") || (usage && usage.route)}</b></span>` +
       (usage ? `<span>tokens <b>${usage.prompt_tokens} in / ${usage.completion_tokens} out</b>${usage.estimated ? " (estimated)" : ""}</span><span>cost <b>$${money(usage.cost_usd)}</b></span>` : "") +
-      `<span>${ms} ms</span>`;
+      `<span>${ms} ms</span>` +
+      (attempts ? `<span class="err">failed over: ${esc(attempts)}</span>` : "");
   } catch (e) { out.innerHTML = `<span class="err">${e.message}</span>`; }
   finally { btn.disabled = false; refreshModels(); refreshUsage(); }
 });
