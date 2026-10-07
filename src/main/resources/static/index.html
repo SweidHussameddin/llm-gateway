@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>llm-gateway console</title>
+<style>
+  :root {
+    --ink: #0E2B38; --ink-2: #123645; --paper: #F1F3F0; --paper-2: #E4E8E5; --line: #CBD3D0;
+    --muted: #5E737B; --marker: #FFD23F; --mint: #1C8C86; --mint-soft: #D5F2EC; --red: #B23A3A;
+    --mono: "JetBrains Mono", "DejaVu Sans Mono", ui-monospace, monospace;
+    --sans: "Inter", "Lato", "Liberation Sans", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--paper); color: var(--ink); font: 15px/1.5 var(--sans); }
+  header { background: var(--ink); color: #fff; padding: 18px 32px; display: flex; align-items: baseline; gap: 18px; }
+  header h1 { margin: 0; font-size: 20px; font-weight: 800; letter-spacing: -.3px; }
+  header p { margin: 0; color: #9DB0B6; font-size: 14px; }
+  header .key { margin-left: auto; display: flex; gap: 8px; align-items: center; font-size: 13px; color: #9DB0B6; }
+  header input { background: var(--ink-2); border: 1px solid #2A4B5A; color: #fff; border-radius: 6px; padding: 6px 10px; font-family: var(--mono); font-size: 13px; width: 150px; }
+  main { display: grid; grid-template-columns: 300px 1fr; gap: 24px; padding: 24px 32px; max-width: 1400px; margin: 0 auto; }
+  aside { display: flex; flex-direction: column; gap: 14px; }
+  .card { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; }
+  .card h2 { margin: 0 0 10px; font-size: 13px; font-weight: 700; color: var(--muted); letter-spacing: .2px; }
+  .routes { display: flex; flex-direction: column; gap: 8px; font-family: var(--mono); font-size: 12.5px; }
+  .alias { margin-top: 6px; }
+  .alias:first-child { margin-top: 0; }
+  .alias b { font: 800 14px var(--sans); }
+  .alias small { display: block; color: var(--muted); font: 12px var(--sans); }
+  .route { display: grid; grid-template-columns: 1fr auto; gap: 6px; align-items: center; padding: 6px 8px; border-radius: 6px; background: var(--paper); }
+  .route small { color: var(--muted); display: block; font-size: 11px; }
+  .pill { font: 700 10.5px var(--sans); padding: 2px 7px; border-radius: 999px; background: var(--mint-soft); color: var(--mint); }
+  .pill.OPEN { background: #F8DADA; color: var(--red); }
+  .pill.HALF_OPEN { background: #FFF1BF; color: #7A5B00; }
+  .pill.off { background: var(--paper-2); color: var(--muted); }
+  .budget { font-family: var(--mono); font-size: 13px; }
+  .bar { height: 8px; background: var(--paper-2); border-radius: 4px; overflow: hidden; margin: 8px 0 6px; }
+  .bar i { display: block; height: 100%; background: var(--mint); width: 0; transition: width .4s; }
+  .bar i.hot { background: var(--red); }
+  section.panel { display: flex; flex-direction: column; gap: 18px; }
+  .tabs { display: flex; gap: 6px; }
+  .tabs button { border: 1px solid var(--line); background: #fff; color: var(--ink); padding: 8px 14px; border-radius: 8px; font: 600 14px var(--sans); cursor: pointer; }
+  .tabs button[aria-selected="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .tab { display: none; }
+  .tab.active { display: block; }
+  form.ask { display: grid; grid-template-columns: 140px 1fr auto; gap: 10px; align-items: start; }
+  select, textarea { font: 14px var(--sans); border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; background: #fff; color: var(--ink); width: 100%; }
+  textarea { min-height: 72px; resize: vertical; }
+  button.go { background: var(--marker); color: #10222C; border: 0; border-radius: 8px; padding: 10px 18px; font: 800 14px var(--sans); cursor: pointer; align-self: stretch; }
+  button.go:disabled { opacity: .5; cursor: wait; }
+  .opts { grid-column: 2; display: flex; gap: 16px; font-size: 13px; color: var(--muted); }
+  .out { margin-top: 14px; min-height: 96px; white-space: pre-wrap; font-size: 15px; line-height: 1.55; }
+  .meta { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .meta span { background: var(--paper); border-radius: 6px; padding: 3px 8px; }
+  .meta span b { color: var(--ink); font-weight: 600; }
+  .steps { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+  .step { display: grid; grid-template-columns: 26px 1fr; gap: 10px; align-items: start; }
+  .step .n { width: 26px; height: 26px; border-radius: 50%; background: var(--ink); color: #fff; font: 700 12px var(--mono); display: grid; place-items: center; }
+  .step .n.model { background: var(--mint); }
+  .step .n.done { background: var(--marker); color: #10222C; }
+  .step .body { background: var(--paper); border-radius: 8px; padding: 8px 12px; font-family: var(--mono); font-size: 12.5px; overflow-x: auto; }
+  .step .body b { font-family: var(--sans); font-size: 13px; }
+  .step .body .r { color: var(--muted); margin-top: 4px; white-space: pre-wrap; }
+  .step .body.err { border-left: 3px solid var(--red); }
+  .final { background: #fff; border: 2px solid var(--marker); border-radius: 10px; padding: 12px 14px; margin-top: 14px; white-space: pre-wrap; }
+  table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 12.5px; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--paper-2); white-space: nowrap; }
+  th { font: 700 11.5px var(--sans); color: var(--muted); }
+  td.num, th.num { text-align: right; }
+  .err { color: var(--red); }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } form.ask { grid-template-columns: 1fr; } .opts { grid-column: 1; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>llm-gateway</h1>
+  <p>one endpoint, several providers, failover, cost per request</p>
+  <label class="key">API key <input id="key" value="demo-key" spellcheck="false"></label>
+</header>
+
+<main>
+  <aside>
+    <div class="card">
+      <h2>Routes and breakers</h2>
+      <div class="routes" id="routes">loading…</div>
+    </div>
+    <div class="card">
+      <h2>Budget for this key</h2>
+      <div class="budget" id="budget">—</div>
+      <div class="bar"><i id="bar"></i></div>
+      <div class="budget" id="budgetNote"></div>
+    </div>
+  </aside>
+
+  <section class="panel">
+    <div class="tabs" role="tablist">
+      <button role="tab" aria-selected="true" data-tab="chat">Chat</button>
+      <button role="tab" aria-selected="false" data-tab="agent">Agent with tools</button>
+      <button role="tab" aria-selected="false" data-tab="ledger">Ledger</button>
+    </div>
+
+    <div class="tab active card" id="tab-chat">
+      <form class="ask" id="chatForm">
+        <select id="chatModel"></select>
+        <textarea id="chatInput">In two sentences: why would a company put a gateway in front of several LLM providers?</textarea>
+        <button class="go" type="submit">Send</button>
+        <div class="opts"><label><input type="checkbox" id="chatStream" checked> stream</label></div>
+      </form>
+      <div class="out" id="chatOut"></div>
+      <div class="meta" id="chatMeta"></div>
+    </div>
+
+    <div class="tab card" id="tab-agent">
+      <form class="ask" id="agentForm">
+        <select id="agentModel"></select>
+        <textarea id="agentInput">Has order 1042 shipped? If yes, tell me the carrier, when it arrives, and the total in USD.</textarea>
+        <button class="go" type="submit">Run</button>
+      </form>
+      <div class="steps" id="agentSteps"></div>
+      <div id="agentFinal"></div>
+      <div class="meta" id="agentMeta"></div>
+    </div>
+
+    <div class="tab card" id="tab-ledger">
+      <table>
+        <thead><tr><th>time</th><th>kind</th><th>model</th><th>route</th><th class="num">in</th><th class="num">out</th><th class="num">cost $</th><th class="num">ms</th></tr></thead>
+        <tbody id="ledgerRows"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const headers = () => ({ "Authorization": "Bearer " + $("key").value.trim(), "Content-Type": "application/json" });
+const money = (v) => Number(v).toFixed(6).replace(/0+$/, "").replace(/\.$/, ".0");
+const esc = (s) => String(s).replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+// just enough markdown for model answers: bold, inline code, line breaks
+const md = (s) => esc(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/`([^`]+)`/g, "<code>$1</code>").replace(/\n/g, "<br>");
+
+document.querySelectorAll(".tabs button").forEach(b => b.addEventListener("click", () => {
+  document.querySelectorAll(".tabs button").forEach(x => x.setAttribute("aria-selected", x === b));
+  document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.id === "tab-" + b.dataset.tab));
+  if (b.dataset.tab === "ledger") refreshUsage();
+}));
+
+async function refreshModels() {
+  const res = await fetch("/v1/models", { headers: headers() });
+  if (!res.ok) { $("routes").innerHTML = '<span class="err">' + res.status + ' – check the key</span>'; return; }
+  const { data } = await res.json();
+  $("routes").innerHTML = data.map(m => `<div class="alias"><b>${m.id}</b><small>${m.description || ""}</small></div>` +
+    m.routes.map(r => `<div class="route"><div>${r.provider}<small>${r.model}</small></div>
+      <span class="pill ${r.configured ? r.breaker : "off"}">${r.configured ? r.breaker.replace("_", " ") : "no key"}</span></div>`).join("")).join("");
+  for (const sel of [$("chatModel"), $("agentModel")]) {
+    const cur = sel.value;
+    sel.innerHTML = data.map(m => `<option value="${m.id}">${m.id}</option>`).join("");
+    if (cur) sel.value = cur;
+  }
+}
+
+async function refreshUsage() {
+  const res = await fetch("/v1/usage?limit=50", { headers: headers() });
+  if (!res.ok) return;
+  const u = await res.json();
+  const pct = u.budget_usd ? Math.min(100, 100 * u.spent_usd / u.budget_usd) : 0;
+  $("budget").textContent = `$${money(u.spent_usd)} of $${money(u.budget_usd)}`;
+  $("bar").style.width = pct + "%";
+  $("bar").classList.toggle("hot", pct >= 90);
+  $("budgetNote").textContent = `${u.requests} requests · key "${u.api_key}"`;
+  $("ledgerRows").innerHTML = u.recent.map(r => `<tr><td>${r.at.slice(11, 19)}</td><td>${r.kind}</td><td>${r.alias}</td>
+    <td>${r.route}</td><td class="num">${r.prompt_tokens}</td><td class="num">${r.completion_tokens}</td>
+    <td class="num">${money(r.cost_usd)}${r.estimated ? " ~" : ""}</td><td class="num">${r.latency_ms}</td></tr>`).join("");
+}
+
+async function* sse(res) {
+  const reader = res.body.getReader(); const dec = new TextDecoder(); let buf = "";
+  while (true) {
+    const { value, done } = await reader.read(); if (done) break;
+    buf += dec.decode(value, { stream: true });
+    let i; while ((i = buf.indexOf("\n\n")) >= 0) {
+      const raw = buf.slice(0, i); buf = buf.slice(i + 2);
+      let event = "message", data = "";
+      for (const line of raw.split("\n")) {
+        if (line.startsWith("event:")) event = line.slice(6).trim();
+        else if (line.startsWith("data:")) data += line.slice(5).trim();
+      }
+      if (data === "[DONE]") return;
+      if (data) yield { event, data: JSON.parse(data) };
+    }
+  }
+}
+
+function showError(el, res, body) {
+  const e = body && body.error ? body.error : { message: res.statusText };
+  el.innerHTML = `<span class="err">${res.status} ${e.type || ""}: ${e.message}</span>` +
+    (e.attempts ? `<div class="meta">${e.attempts.map(a => `<span>${a}</span>`).join("")}</div>` : "");
+}
+
+$("chatForm").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const btn = ev.target.querySelector("button"); btn.disabled = true;
+  const out = $("chatOut"), meta = $("chatMeta"); out.textContent = ""; meta.innerHTML = "";
+  const t0 = performance.now();
+  const body = { model: $("chatModel").value, messages: [{ role: "user", content: $("chatInput").value }], stream: $("chatStream").checked };
+  try {
+    const res = await fetch("/v1/chat/completions", { method: "POST", headers: headers(), body: JSON.stringify(body) });
+    if (!res.ok) { showError(out, res, await res.json().catch(() => null)); return; }
+    let usage = null;
+    if (body.stream) {
+      for await (const { data } of sse(res)) {
+        const d = data.choices && data.choices[0] && data.choices[0].delta;
+        if (d && d.content) out.textContent += d.content;
+        if (data.usage) usage = data.usage;
+      }
+    } else {
+      const data = await res.json(); out.textContent = data.choices[0].message.content; usage = data.usage;
+    }
+    out.innerHTML = md(out.textContent);
+    const ms = Math.round(performance.now() - t0);
+    meta.innerHTML = `<span>route <b>${res.headers.get("X-Gateway-Route") || (usage && usage.route)}</b></span>` +
+      (usage ? `<span>tokens <b>${usage.prompt_tokens} in / ${usage.completion_tokens} out</b>${usage.estimated ? " (estimated)" : ""}</span><span>cost <b>$${money(usage.cost_usd)}</b></span>` : "") +
+      `<span>${ms} ms</span>`;
+  } catch (e) { out.innerHTML = `<span class="err">${e.message}</span>`; }
+  finally { btn.disabled = false; refreshModels(); refreshUsage(); }
+});
+
+$("agentForm").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const btn = ev.target.querySelector("button"); btn.disabled = true;
+  const steps = $("agentSteps"), fin = $("agentFinal"), meta = $("agentMeta");
+  steps.innerHTML = ""; fin.innerHTML = ""; meta.innerHTML = "";
+  const add = (cls, n, html) => { steps.insertAdjacentHTML("beforeend", `<div class="step"><div class="n ${cls}">${n}</div><div class="body">${html}</div></div>`); };
+  try {
+    const res = await fetch("/v1/agent/runs", { method: "POST", headers: headers(),
+      body: JSON.stringify({ model: $("agentModel").value, input: $("agentInput").value, stream: true }) });
+    if (!res.ok) { showError(fin, res, await res.json().catch(() => null)); return; }
+    for await (const { event, data } of sse(res)) {
+      if (event === "model_call") add("model", "M" + data.n, `<b>model call</b> → ${data.route} · ${data.prompt_tokens} in / ${data.completion_tokens} out · $${money(data.cost_usd)}`);
+      else if (event === "tool_call") add("", data.n, `<b>${data.tool}</b>(${JSON.stringify(data.arguments)})`);
+      else if (event === "tool_result") {
+        const last = steps.lastElementChild.querySelector(".body");
+        last.insertAdjacentHTML("beforeend", `<div class="r">${data.error ? "error: " + data.error : JSON.stringify(data.result)}</div>`);
+        if (data.error) last.classList.add("err");
+      } else if (event === "done") {
+        fin.innerHTML = `<div class="final">${data.output ? md(data.output) : "(no answer)"}</div>`;
+        meta.innerHTML = `<span>model calls <b>${data.model_calls}</b></span><span>tools <b>${data.steps.length}</b></span>` +
+          `<span>tokens <b>${data.prompt_tokens} in / ${data.completion_tokens} out</b></span><span>cost <b>$${money(data.cost_usd)}</b></span><span>${data.latency_ms} ms</span>` +
+          (data.warning ? `<span class="err">${data.warning}</span>` : "");
+      } else if (event === "error") fin.innerHTML = `<span class="err">${data.error.message}</span>`;
+    }
+  } catch (e) { fin.innerHTML = `<span class="err">${e.message}</span>`; }
+  finally { btn.disabled = false; refreshModels(); refreshUsage(); }
+});
+
+$("key").addEventListener("change", () => { refreshModels(); refreshUsage(); });
+refreshModels(); refreshUsage();
+</script>
+</body>
+</html>

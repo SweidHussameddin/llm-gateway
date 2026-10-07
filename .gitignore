@@ -1,0 +1,7 @@
+target/
+.env
+data/usage.jsonl
+*.iml
+.idea/
+.vscode/
+*.log

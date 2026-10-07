@@ -1,0 +1,94 @@
+spring:
+  application:
+    name: llm-gateway
+  config:
+    import: optional:file:.env[.properties]
+  threads:
+    virtual:
+      enabled: true
+  jackson:
+    property-naming-strategy: SNAKE_CASE
+    default-property-inclusion: non_null
+  mvc:
+    async:
+      request-timeout: 300000
+
+server:
+  port: 8090
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+
+gateway:
+  ledger-file: data/usage.jsonl
+
+  # Clients authenticate with "Authorization: Bearer <key>". A key is blocked with 402 once its
+  # spend reaches the budget. The budget resets when the process restarts (or clear the ledger).
+  api-keys:
+    - key: ${GATEWAY_KEY_DEMO:demo-key}
+      name: demo
+      budget-usd: 5.00
+    - key: ${GATEWAY_KEY_TRIAL:trial-key}
+      name: trial
+      budget-usd: 0.002
+
+  providers:
+    local:
+      type: openai-compatible
+      base-url: http://localhost:11434/v1
+      api-key: ollama
+      timeout-seconds: 120
+    openrouter:
+      type: openai-compatible
+      base-url: https://openrouter.ai/api/v1
+      api-key: ${OPENROUTER_API_KEY:}
+      timeout-seconds: 120
+    anthropic:
+      type: anthropic
+      base-url: https://api.anthropic.com
+      api-key: ${ANTHROPIC_API_KEY:}
+      timeout-seconds: 120
+
+  breaker:
+    failure-threshold: 3
+    open-seconds: 30
+
+  # A model alias is what clients ask for. Routes are tried in order; a route whose circuit
+  # breaker is open is skipped. Prices are USD per million tokens and feed the cost ledger.
+  models:
+    - alias: fast
+      description: Small, cheap, local first
+      routes:
+        - provider: local
+          model: qwen3:8b
+          input-usd-per-mtok: 0
+          output-usd-per-mtok: 0
+        - provider: openrouter
+          model: nvidia/nemotron-3-super-120b-a12b:free
+          input-usd-per-mtok: 0
+          output-usd-per-mtok: 0
+        - provider: openrouter
+          model: google/gemma-4-31b-it:free
+          input-usd-per-mtok: 0
+          output-usd-per-mtok: 0
+    - alias: smart
+      description: Larger hosted models, paid
+      routes:
+        - provider: openrouter
+          model: openai/gpt-oss-120b
+          input-usd-per-mtok: 0.05
+          output-usd-per-mtok: 0.25
+        - provider: openrouter
+          model: anthropic/claude-sonnet-4.5
+          input-usd-per-mtok: 3
+          output-usd-per-mtok: 15
+    - alias: claude
+      description: Native Anthropic Messages API, translated to and from the OpenAI shape
+      routes:
+        - provider: anthropic
+          model: claude-sonnet-4-5
+          input-usd-per-mtok: 3
+          output-usd-per-mtok: 15

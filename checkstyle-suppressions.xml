@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<!DOCTYPE suppressions PUBLIC
+    "-//Checkstyle//DTD SuppressionFilter Configuration 1.2//EN"
+    "https://checkstyle.org/dtds/suppressions_1_2.dtd">
+<suppressions>
+  <!-- Google style otherwise; Javadoc is required on classes with a story to tell, not on every
+       accessor and record component. -->
+  <suppress checks="MissingJavadocMethod|MissingJavadocType" files=".*"/>
+</suppressions>
